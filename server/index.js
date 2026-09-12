@@ -47,7 +47,7 @@ app.get("/", (req, res) => {
 
 // ==================================================
 // DIRECT MARIADB DATABASE TEST
-// Temporary diagnostic route
+// TEMPORARY DIAGNOSTIC ROUTE
 // ==================================================
 
 app.get("/api/test-direct-db", async (req, res) => {
@@ -57,6 +57,15 @@ app.get("/api/test-direct-db", async (req, res) => {
     console.log("====================================");
     console.log("DIRECT MARIADB DATABASE TEST START");
     console.log("====================================");
+
+    console.log("DB_HOST:", process.env.DB_HOST);
+    console.log("DB_PORT:", process.env.DB_PORT);
+    console.log("DB_USER:", process.env.DB_USER);
+    console.log("DB_NAME:", process.env.DB_NAME);
+    console.log(
+      "DB_PASSWORD:",
+      process.env.DB_PASSWORD ? "SET" : "MISSING"
+    );
 
     connection = await mariadb.createConnection({
       host: process.env.DB_HOST,
@@ -86,28 +95,51 @@ app.get("/api/test-direct-db", async (req, res) => {
     });
   } catch (error) {
     console.error("====================================");
-    console.error("❌ DIRECT DB ERROR");
+    console.error("❌ DIRECT MARIADB ERROR");
     console.error("====================================");
 
-    console.error("Name:", error?.name);
-    console.error("Message:", error?.message);
-    console.error("Code:", error?.code);
-    console.error("Errno:", error?.errno);
-    console.error("SQL State:", error?.sqlState);
-    console.error("Stack:", error?.stack);
-    console.error("Full Error:", error);
+    console.error("Error type:", typeof error);
+    console.error("Error name:", error?.name);
+    console.error("Error message:", error?.message);
+    console.error("Error code:", error?.code);
+    console.error("Error errno:", error?.errno);
+    console.error("Error sqlState:", error?.sqlState);
+    console.error("Error fatal:", error?.fatal);
+    console.error("Error stack:", error?.stack);
+    console.error("Error toString:", String(error));
+
+    console.error(
+      "Error own properties:",
+      Object.getOwnPropertyNames(error || {})
+    );
+
+    console.error(
+      "Error JSON:",
+      JSON.stringify(
+        error,
+        Object.getOwnPropertyNames(error || {})
+      )
+    );
+
+    console.error("Full error:", error);
 
     console.error("====================================");
 
     res.status(500).json({
       success: false,
       message: "Direct MariaDB connection failed",
+
       error: {
+        type: typeof error,
         name: error?.name || null,
         message: error?.message || null,
         code: error?.code || null,
         errno: error?.errno || null,
         sqlState: error?.sqlState || null,
+        fatal: error?.fatal ?? null,
+        string: String(error),
+        ownProperties: Object.getOwnPropertyNames(error || {}),
+        stack: error?.stack || null,
       },
     });
   } finally {
@@ -118,7 +150,7 @@ app.get("/api/test-direct-db", async (req, res) => {
       } catch (closeError) {
         console.error(
           "Database connection close error:",
-          closeError?.message
+          closeError
         );
       }
     }
