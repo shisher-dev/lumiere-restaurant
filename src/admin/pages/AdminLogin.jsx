@@ -1,19 +1,35 @@
 import { useState } from "react";
-import { LockKeyhole, Mail, ArrowRight } from "lucide-react";
+import {
+  LockKeyhole,
+  Mail,
+  ArrowRight,
+  Loader2,
+} from "lucide-react";
+
+const API_URL =
+  "https://lumiere-restaurant-1dgb.onrender.com/api";
 
 function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // =========================
+  // LOGIN
+  // =========================
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     setError("");
 
-    if (!email || !password) {
-      setError("Please enter your email and password.");
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail || !password) {
+      setError(
+        "Please enter your email and password."
+      );
       return;
     }
 
@@ -21,34 +37,61 @@ function AdminLogin() {
       setLoading(true);
 
       const response = await fetch(
-        "http://localhost:5000/api/admin/login",
+        `${API_URL}/admin/login`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            email,
+            email: cleanEmail,
             password,
           }),
         }
       );
 
-      const data = await response.json();
+      const data = await response
+        .json()
+        .catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.message || "Login failed");
+        throw new Error(
+          data.message ||
+            "Invalid email or password."
+        );
       }
 
-      localStorage.setItem("adminToken", data.token);
+      if (!data.token) {
+        throw new Error(
+          "Login successful, but no authentication token was received."
+        );
+      }
+
+      // Save authentication data
       localStorage.setItem(
-        "adminData",
-        JSON.stringify(data.data)
+        "adminToken",
+        data.token
       );
 
+      if (data.data) {
+        localStorage.setItem(
+          "adminData",
+          JSON.stringify(data.data)
+        );
+      }
+
+      // Redirect to admin dashboard
       window.location.href = "/admin";
-    } catch (error) {
-      setError(error.message);
+    } catch (err) {
+      console.error(
+        "Admin login error:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Unable to login. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -59,7 +102,9 @@ function AdminLogin() {
       <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center">
         <div className="w-full max-w-md">
 
-          {/* Brand */}
+          {/* =========================
+              BRAND
+          ========================= */}
           <div className="mb-10 text-center">
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[#d6ad60]/50 bg-[#d6ad60]/10">
               <span className="font-serif text-2xl text-[#e8c982]">
@@ -76,7 +121,9 @@ function AdminLogin() {
             </p>
           </div>
 
-          {/* Login Card */}
+          {/* =========================
+              LOGIN CARD
+          ========================= */}
           <div className="rounded-3xl border border-white/10 bg-[#121212] p-7 shadow-2xl sm:p-9">
 
             <div className="mb-8">
@@ -89,9 +136,14 @@ function AdminLogin() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-5"
+            >
 
-              {/* Email */}
+              {/* =========================
+                  EMAIL
+              ========================= */}
               <div>
                 <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-white/50">
                   Email Address
@@ -107,14 +159,21 @@ function AdminLogin() {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setError("");
+                    }}
                     placeholder="admin@lumiere.com"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-[#d6ad60]/60"
+                    autoComplete="email"
+                    disabled={loading}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-[#d6ad60]/60 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
               </div>
 
-              {/* Password */}
+              {/* =========================
+                  PASSWORD
+              ========================= */}
               <div>
                 <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-white/50">
                   Password
@@ -130,39 +189,61 @@ function AdminLogin() {
                   <input
                     type="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setError("");
+                    }}
                     placeholder="••••••••"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-[#d6ad60]/60"
+                    autoComplete="current-password"
+                    disabled={loading}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-[#d6ad60]/60 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
               </div>
 
-              {/* Error */}
+              {/* =========================
+                  ERROR
+              ========================= */}
               {error && (
-                <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-400">
                   {error}
                 </div>
               )}
 
-              {/* Submit */}
+              {/* =========================
+                  SUBMIT
+              ========================= */}
               <button
                 type="submit"
                 disabled={loading}
                 className="group flex w-full items-center justify-center gap-3 rounded-xl bg-[#d6ad60] py-3.5 text-sm font-semibold text-[#0d0d0d] transition duration-300 hover:bg-[#e8c982] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? "Signing in..." : "Sign In"}
+                {loading ? (
+                  <>
+                    <Loader2
+                      size={17}
+                      className="animate-spin"
+                    />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    Sign In
 
-                {!loading && (
-                  <ArrowRight
-                    size={17}
-                    className="transition-transform duration-300 group-hover:translate-x-1"
-                  />
+                    <ArrowRight
+                      size={17}
+                      className="transition-transform duration-300 group-hover:translate-x-1"
+                    />
+                  </>
                 )}
               </button>
 
             </form>
           </div>
 
+          {/* =========================
+              FOOTER
+          ========================= */}
           <p className="mt-6 text-center text-xs text-white/25">
             Lumière Restaurant · Admin Portal
           </p>
