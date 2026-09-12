@@ -13,6 +13,9 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+const API_URL =
+  "https://lumiere-restaurant-1dgb.onrender.com/api";
+
 const initialForm = {
   name: "",
   description: "",
@@ -24,8 +27,6 @@ const initialForm = {
   isAvailable: true,
   isFeatured: false,
 };
-
-const API_URL = "http://localhost:5000/api";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
@@ -59,15 +60,45 @@ function Foods() {
   const [error, setError] = useState("");
 
   // =========================================================
+  // TOKEN
+  // =========================================================
+
+  const getToken = () => {
+    return localStorage.getItem("adminToken");
+  };
+
+  // =========================================================
+  // SAFE JSON RESPONSE
+  // =========================================================
+
+  const parseResponse = async (response) => {
+    const text = await response.text();
+
+    if (!text) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(
+        `Server returned an invalid response (${response.status}).`
+      );
+    }
+  };
+
+  // =========================================================
   // FETCH FOODS
   // =========================================================
 
   const fetchFoods = async () => {
     try {
       setLoading(true);
+      setError("");
 
       const response = await fetch(`${API_URL}/foods`);
-      const data = await response.json();
+
+      const data = await parseResponse(response);
 
       if (!response.ok) {
         throw new Error(
@@ -75,10 +106,21 @@ function Foods() {
         );
       }
 
-      setFoods(data.data || data);
+      const foodList = Array.isArray(data)
+        ? data
+        : Array.isArray(data.data)
+        ? data.data
+        : [];
+
+      setFoods(foodList);
     } catch (error) {
       console.error("Fetch foods error:", error);
-      setError(error.message || "Failed to fetch foods.");
+
+      setError(
+        error.message || "Failed to fetch foods."
+      );
+
+      setFoods([]);
     } finally {
       setLoading(false);
     }
@@ -94,7 +136,7 @@ function Foods() {
         `${API_URL}/categories`
       );
 
-      const data = await response.json();
+      const data = await parseResponse(response);
 
       if (!response.ok) {
         throw new Error(
@@ -102,7 +144,13 @@ function Foods() {
         );
       }
 
-      setCategories(data.data || data);
+      const categoryList = Array.isArray(data)
+        ? data
+        : Array.isArray(data.data)
+        ? data.data
+        : [];
+
+      setCategories(categoryList);
     } catch (error) {
       console.error(
         "Fetch categories error:",
@@ -119,6 +167,18 @@ function Foods() {
     fetchFoods();
     fetchCategories();
   }, []);
+
+  // =========================================================
+  // CLEANUP IMAGE PREVIEW
+  // =========================================================
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
   // =========================================================
   // FORM CHANGE
@@ -170,21 +230,18 @@ function Foods() {
       return;
     }
 
-    // Revoke previous preview URL
     if (imagePreview?.startsWith("blob:")) {
       URL.revokeObjectURL(imagePreview);
     }
 
+    const previewUrl = URL.createObjectURL(file);
+
     setSelectedImage(file);
-
-    const previewUrl =
-      URL.createObjectURL(file);
-
     setImagePreview(previewUrl);
   };
 
   // =========================================================
-  // UPLOAD IMAGE TO CLOUDINARY
+  // UPLOAD IMAGE
   // =========================================================
 
   const uploadImageToCloudinary = async () => {
@@ -199,37 +256,30 @@ function Foods() {
       setImageUploading(true);
       setError("");
 
-      const token =
-        localStorage.getItem("adminToken");
+      const token = getToken();
 
       if (!token) {
         throw new Error(
-          "Admin authentication required."
+          "Admin authentication required. Please login again."
         );
       }
 
       const formData = new FormData();
 
-      formData.append(
-        "image",
-        selectedImage
-      );
+      formData.append("image", selectedImage);
 
       const response = await fetch(
         `${API_URL}/upload/image`,
         {
           method: "POST",
-
           headers: {
             Authorization: `Bearer ${token}`,
           },
-
           body: formData,
         }
       );
 
-      const data =
-        await response.json();
+      const data = await parseResponse(response);
 
       if (!response.ok) {
         throw new Error(
@@ -238,9 +288,7 @@ function Foods() {
         );
       }
 
-      const uploadedUrl =
-        data.data?.url;
-
+      const uploadedUrl = data.data?.url;
       const uploadedPublicId =
         data.data?.publicId;
 
@@ -330,13 +378,11 @@ function Foods() {
           ? String(food.rating)
           : "0",
 
-      isAvailable: Boolean(
-        food.isAvailable
-      ),
+      isAvailable:
+        Boolean(food.isAvailable),
 
-      isFeatured: Boolean(
-        food.isFeatured
-      ),
+      isFeatured:
+        Boolean(food.isFeatured),
     });
 
     setSelectedImage(null);
@@ -351,10 +397,7 @@ function Foods() {
   // =========================================================
 
   const closeModal = () => {
-    if (
-      saving ||
-      imageUploading
-    ) {
+    if (saving || imageUploading) {
       return;
     }
 
@@ -363,7 +406,6 @@ function Foods() {
     }
 
     setShowModal(false);
-
     setEditingFood(null);
 
     setForm({
@@ -372,12 +414,11 @@ function Foods() {
 
     setSelectedImage(null);
     setImagePreview("");
-
     setError("");
   };
 
   // =========================================================
-  // SUBMIT ADD / EDIT
+  // SUBMIT
   // =========================================================
 
   const handleSubmit = async (e) => {
@@ -385,37 +426,49 @@ function Foods() {
 
     setError("");
 
-    // =====================================================
-    // VALIDATION
-    // =====================================================
-
+    // Validation
     if (!form.name.trim()) {
-      setError(
-        "Food name is required."
-      );
+      setError("Food name is required.");
       return;
     }
 
     if (!form.description.trim()) {
-      setError(
-        "Description is required."
-      );
+      setError("Description is required.");
       return;
     }
+
+    const price = Number(form.price);
 
     if (
       form.price === "" ||
-      Number(form.price) < 0
+      !Number.isFinite(price) ||
+      price < 0
     ) {
-      setError(
-        "Please enter a valid price."
-      );
+      setError("Please enter a valid price.");
       return;
     }
 
-    if (!form.categoryId) {
+    const categoryId = Number(form.categoryId);
+
+    if (
+      !form.categoryId ||
+      !Number.isInteger(categoryId) ||
+      categoryId <= 0
+    ) {
+      setError("Please select a category.");
+      return;
+    }
+
+    const rating = Number(form.rating);
+
+    if (
+      form.rating === "" ||
+      !Number.isFinite(rating) ||
+      rating < 0 ||
+      rating > 5
+    ) {
       setError(
-        "Please select a category."
+        "Rating must be between 0 and 5."
       );
       return;
     }
@@ -424,44 +477,23 @@ function Foods() {
       !form.image.trim() &&
       !selectedImage
     ) {
-      setError(
-        "Please select an image."
-      );
-      return;
-    }
-
-    if (
-      form.rating === "" ||
-      Number(form.rating) < 0 ||
-      Number(form.rating) > 5
-    ) {
-      setError(
-        "Rating must be between 0 and 5."
-      );
+      setError("Please select an image.");
       return;
     }
 
     try {
       setSaving(true);
 
-      const token =
-        localStorage.getItem(
-          "adminToken"
-        );
+      const token = getToken();
 
       if (!token) {
         throw new Error(
-          "Admin authentication required."
+          "Admin authentication required. Please login again."
         );
       }
 
-      // =====================================================
-      // IMAGE
-      // =====================================================
-
-      let imageUrl =
-        form.image.trim();
-
+      // Upload new image if selected
+      let imageUrl = form.image.trim();
       let imagePublicId =
         form.publicId || "";
 
@@ -469,16 +501,10 @@ function Foods() {
         const uploadedImage =
           await uploadImageToCloudinary();
 
-        imageUrl =
-          uploadedImage.url;
-
+        imageUrl = uploadedImage.url;
         imagePublicId =
           uploadedImage.publicId;
       }
-
-      // =====================================================
-      // ADD / UPDATE
-      // =====================================================
 
       const isEditing =
         Boolean(editingFood);
@@ -487,59 +513,39 @@ function Foods() {
         ? `${API_URL}/foods/${editingFood.id}`
         : `${API_URL}/foods`;
 
-      const response = await fetch(
-        url,
-        {
-          method: isEditing
-            ? "PUT"
-            : "POST",
+      const response = await fetch(url, {
+        method: isEditing ? "PUT" : "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
 
-            Authorization:
-              `Bearer ${token}`,
-          },
+        body: JSON.stringify({
+          name: form.name.trim(),
 
-          body: JSON.stringify({
-            name: form.name.trim(),
+          description:
+            form.description.trim(),
 
-            description:
-              form.description.trim(),
+          price,
 
-            price: Number(
-              form.price
-            ),
+          categoryId,
 
-            categoryId: Number(
-              form.categoryId
-            ),
+          image: imageUrl,
 
-            image: imageUrl,
+          publicId: imagePublicId,
 
-            publicId:
-              imagePublicId,
+          rating,
 
-            rating: Number(
-              form.rating || 0
-            ),
+          isAvailable:
+            Boolean(form.isAvailable),
 
-            isAvailable:
-              Boolean(
-                form.isAvailable
-              ),
+          isFeatured:
+            Boolean(form.isFeatured),
+        }),
+      });
 
-            isFeatured:
-              Boolean(
-                form.isFeatured
-              ),
-          }),
-        }
-      );
-
-      const data =
-        await response.json();
+      const data = await parseResponse(response);
 
       if (!response.ok) {
         throw new Error(
@@ -550,16 +556,12 @@ function Foods() {
         );
       }
 
-      // =====================================================
-      // RESET
-      // =====================================================
-
+      // Reset
       if (imagePreview?.startsWith("blob:")) {
         URL.revokeObjectURL(imagePreview);
       }
 
       setShowModal(false);
-
       setEditingFood(null);
 
       setForm({
@@ -568,7 +570,6 @@ function Foods() {
 
       setSelectedImage(null);
       setImagePreview("");
-
       setError("");
 
       await fetchFoods();
@@ -590,30 +591,24 @@ function Foods() {
   };
 
   // =========================================================
-  // DELETE FOOD
+  // DELETE
   // =========================================================
 
   const handleDelete = async (food) => {
-    const confirmed =
-      window.confirm(
-        `Are you sure you want to delete "${food.name}"?`
-      );
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${food.name}"?`
+    );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     try {
       setDeletingId(food.id);
 
-      const token =
-        localStorage.getItem(
-          "adminToken"
-        );
+      const token = getToken();
 
       if (!token) {
         throw new Error(
-          "Admin authentication required."
+          "Admin authentication required. Please login again."
         );
       }
 
@@ -623,14 +618,12 @@ function Foods() {
           method: "DELETE",
 
           headers: {
-            Authorization:
-              `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
-      const data =
-        await response.json();
+      const data = await parseResponse(response);
 
       if (!response.ok) {
         throw new Error(
@@ -639,7 +632,11 @@ function Foods() {
         );
       }
 
-      await fetchFoods();
+      setFoods((prev) =>
+        prev.filter(
+          (item) => item.id !== food.id
+        )
+      );
     } catch (error) {
       console.error(
         "Delete food error:",
@@ -665,14 +662,25 @@ function Foods() {
     try {
       setTogglingId(food.id);
 
-      const token =
-        localStorage.getItem(
-          "adminToken"
-        );
+      const token = getToken();
 
       if (!token) {
         throw new Error(
-          "Admin authentication required."
+          "Admin authentication required. Please login again."
+        );
+      }
+
+      const categoryId = Number(
+        food.categoryId ||
+          food.category?.id
+      );
+
+      if (
+        !Number.isInteger(categoryId) ||
+        categoryId <= 0
+      ) {
+        throw new Error(
+          "This food does not have a valid category."
         );
       }
 
@@ -699,10 +707,7 @@ function Foods() {
               food.price || 0
             ),
 
-            categoryId: Number(
-              food.categoryId ||
-                food.category?.id
-            ),
+            categoryId,
 
             image:
               food.image || "",
@@ -728,7 +733,7 @@ function Foods() {
       );
 
       const data =
-        await response.json();
+        await parseResponse(response);
 
       if (!response.ok) {
         throw new Error(
@@ -737,7 +742,20 @@ function Foods() {
         );
       }
 
-      await fetchFoods();
+      const updatedFood =
+        data.data;
+
+      if (updatedFood) {
+        setFoods((prev) =>
+          prev.map((item) =>
+            item.id === food.id
+              ? updatedFood
+              : item
+          )
+        );
+      } else {
+        await fetchFoods();
+      }
     } catch (error) {
       console.error(
         "Toggle availability error:",
@@ -754,23 +772,26 @@ function Foods() {
   };
 
   // =========================================================
-  // FILTER FOODS
+  // FILTER
   // =========================================================
 
-  const filteredFoods =
-    foods.filter((food) =>
+  const searchTerm =
+    search.trim().toLowerCase();
+
+  const filteredFoods = foods.filter(
+    (food) =>
       food.name
         ?.toLowerCase()
-        .includes(
-          search.toLowerCase()
-        )
-    );
+        .includes(searchTerm)
+  );
+
+  // =========================================================
+  // RENDER
+  // =========================================================
 
   return (
     <div>
-      {/* =====================================================
-          HEADER
-      ===================================================== */}
+      {/* HEADER */}
 
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
         <div>
@@ -798,9 +819,15 @@ function Foods() {
         </button>
       </div>
 
-      {/* =====================================================
-          SEARCH
-      ===================================================== */}
+      {/* ERROR */}
+
+      {error && !showModal && (
+        <div className="mt-5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+
+      {/* SEARCH */}
 
       <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#121212] p-4 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -828,9 +855,7 @@ function Foods() {
         </div>
       </div>
 
-      {/* =====================================================
-          FOOD TABLE
-      ===================================================== */}
+      {/* FOOD TABLE */}
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-[#121212]">
         {loading ? (
@@ -873,9 +898,7 @@ function Foods() {
           </div>
         ) : (
           <>
-            {/* =================================================
-                DESKTOP TABLE
-            ================================================= */}
+            {/* DESKTOP */}
 
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full">
@@ -919,36 +942,24 @@ function Foods() {
                             <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#0d0d0d]">
                               {food.image ? (
                                 <img
-                                  src={
-                                    food.image
-                                  }
-                                  alt={
-                                    food.name
-                                  }
+                                  src={food.image}
+                                  alt={food.name}
                                   className="h-full w-full object-cover"
                                 />
                               ) : (
                                 <div className="flex h-full w-full items-center justify-center text-white/20">
-                                  <Eye
-                                    size={
-                                      18
-                                    }
-                                  />
+                                  <Eye size={18} />
                                 </div>
                               )}
                             </div>
 
                             <div>
                               <h3 className="font-medium text-white">
-                                {
-                                  food.name
-                                }
+                                {food.name}
                               </h3>
 
                               <p className="mt-1 max-w-xs truncate text-xs text-white/35">
-                                {
-                                  food.description
-                                }
+                                {food.description}
                               </p>
                             </div>
                           </div>
@@ -956,9 +967,7 @@ function Foods() {
 
                         <td className="px-6 py-4">
                           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/60">
-                            {food
-                              .category
-                              ?.name ||
+                            {food.category?.name ||
                               food.category ||
                               "Uncategorized"}
                           </span>
@@ -968,31 +977,23 @@ function Foods() {
                           <span className="text-sm font-semibold text-[#e8c982]">
                             ৳
                             {Number(
-                              food.price ||
-                                0
-                            ).toFixed(
-                              2
-                            )}
+                              food.price || 0
+                            ).toFixed(2)}
                           </span>
                         </td>
 
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-1.5">
                             <Star
-                              size={
-                                14
-                              }
+                              size={14}
                               fill="currentColor"
                               className="text-[#e8c982]"
                             />
 
                             <span className="text-sm text-white/70">
                               {Number(
-                                food.rating ||
-                                  0
-                              ).toFixed(
-                                1
-                              )}
+                                food.rating || 0
+                              ).toFixed(1)}
                             </span>
                           </div>
                         </td>
@@ -1031,11 +1032,7 @@ function Foods() {
                               }
                               className="rounded-lg border border-white/10 p-2 text-white/40 transition hover:border-[#d6ad60]/30 hover:bg-[#d6ad60]/10 hover:text-[#e8c982]"
                             >
-                              <Pencil
-                                size={
-                                  16
-                                }
-                              />
+                              <Pencil size={16} />
                             </button>
 
                             <button
@@ -1060,17 +1057,9 @@ function Foods() {
                               food.id ? (
                                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-[#e8c982]" />
                               ) : food.isAvailable ? (
-                                <EyeOff
-                                  size={
-                                    16
-                                  }
-                                />
+                                <EyeOff size={16} />
                               ) : (
-                                <Eye
-                                  size={
-                                    16
-                                  }
-                                />
+                                <Eye size={16} />
                               )}
                             </button>
 
@@ -1092,11 +1081,7 @@ function Foods() {
                               food.id ? (
                                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-red-300" />
                               ) : (
-                                <Trash2
-                                  size={
-                                    16
-                                  }
-                                />
+                                <Trash2 size={16} />
                               )}
                             </button>
                           </div>
@@ -1108,9 +1093,7 @@ function Foods() {
               </table>
             </div>
 
-            {/* =================================================
-                MOBILE CARDS
-            ================================================= */}
+            {/* MOBILE */}
 
             <div className="divide-y divide-white/5 lg:hidden">
               {filteredFoods.map(
@@ -1129,11 +1112,7 @@ function Foods() {
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-white/20">
-                            <Eye
-                              size={
-                                18
-                              }
-                            />
+                            <Eye size={18} />
                           </div>
                         )}
                       </div>
@@ -1142,15 +1121,11 @@ function Foods() {
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <h3 className="font-serif text-lg text-white">
-                              {
-                                food.name
-                              }
+                              {food.name}
                             </h3>
 
                             <p className="mt-1 text-xs text-white/35">
-                              {food
-                                .category
-                                ?.name ||
+                              {food.category?.name ||
                                 food.category ||
                                 "Uncategorized"}
                             </p>
@@ -1159,31 +1134,23 @@ function Foods() {
                           <span className="shrink-0 text-sm font-semibold text-[#e8c982]">
                             ৳
                             {Number(
-                              food.price ||
-                                0
-                            ).toFixed(
-                              2
-                            )}
+                              food.price || 0
+                            ).toFixed(2)}
                           </span>
                         </div>
 
                         <div className="mt-3 flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
                             <Star
-                              size={
-                                14
-                              }
+                              size={14}
                               fill="currentColor"
                               className="text-[#e8c982]"
                             />
 
                             <span className="text-xs text-white/60">
                               {Number(
-                                food.rating ||
-                                  0
-                              ).toFixed(
-                                1
-                              )}
+                                food.rating || 0
+                              ).toFixed(1)}
                             </span>
                           </div>
 
@@ -1225,11 +1192,7 @@ function Foods() {
                         }
                         className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 py-2.5 text-xs text-white/55 transition hover:border-[#d6ad60]/30 hover:text-[#e8c982]"
                       >
-                        <Pencil
-                          size={
-                            14
-                          }
-                        />
+                        <Pencil size={14} />
                         Edit
                       </button>
 
@@ -1250,17 +1213,9 @@ function Foods() {
                         food.id ? (
                           <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-[#e8c982]" />
                         ) : food.isAvailable ? (
-                          <EyeOff
-                            size={
-                              14
-                            }
-                          />
+                          <EyeOff size={14} />
                         ) : (
-                          <Eye
-                            size={
-                              14
-                            }
-                          />
+                          <Eye size={14} />
                         )}
                       </button>
 
@@ -1281,11 +1236,7 @@ function Foods() {
                         food.id ? (
                           <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-red-300" />
                         ) : (
-                          <Trash2
-                            size={
-                              14
-                            }
-                          />
+                          <Trash2 size={14} />
                         )}
                       </button>
                     </div>
@@ -1297,14 +1248,11 @@ function Foods() {
         )}
       </div>
 
-      {/* =====================================================
-          ADD / EDIT FOOD MODAL
-      ===================================================== */}
+      {/* MODAL */}
 
       {showModal && (
         <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
           <div className="relative z-10000 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[#121212] shadow-2xl">
-
             {/* HEADER */}
 
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
@@ -1345,7 +1293,7 @@ function Foods() {
                 </div>
               )}
 
-              {/* FOOD NAME */}
+              {/* NAME */}
 
               <div>
                 <label className="mb-2 block text-[10px] text-white/50">
@@ -1440,7 +1388,7 @@ function Foods() {
                 </div>
               </div>
 
-              {/* IMAGE UPLOAD */}
+              {/* IMAGE */}
 
               <div className="mt-4">
                 <label className="mb-2 block text-[10px] text-white/50">
@@ -1448,7 +1396,6 @@ function Foods() {
                 </label>
 
                 <div className="rounded-xl border border-white/10 bg-[#0d0d0d] p-4">
-
                   {imagePreview ? (
                     <div className="relative mb-4 overflow-hidden rounded-xl border border-white/10">
                       <img
@@ -1460,9 +1407,7 @@ function Foods() {
                       <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
 
                       <div className="absolute bottom-3 left-3 flex max-w-[90%] items-center gap-2 truncate rounded-full bg-black/60 px-3 py-1.5 text-[10px] text-white/70 backdrop-blur-md">
-                        <ImageIcon
-                          size={13}
-                        />
+                        <ImageIcon size={13} />
 
                         <span className="truncate">
                           {selectedImage
@@ -1493,9 +1438,7 @@ function Foods() {
                         : ""
                     }`}
                   >
-                    <Upload
-                      size={17}
-                    />
+                    <Upload size={17} />
 
                     {selectedImage
                       ? "Choose Different Image"
@@ -1556,7 +1499,6 @@ function Foods() {
               {/* AVAILABLE + FEATURED */}
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-
                 <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-[#0d0d0d] p-4 transition hover:border-[#d6ad60]/30">
                   <input
                     type="checkbox"
@@ -1640,9 +1582,7 @@ function Foods() {
                     </>
                   ) : (
                     <>
-                      <Save
-                        size={17}
-                      />
+                      <Save size={17} />
 
                       {editingFood
                         ? "Save Changes"
