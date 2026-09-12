@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import mariadb from "mariadb";
 import { prisma } from "./lib/prisma.js";
 
 import categoryRoutes from "./routes/categoryRoutes.js";
@@ -45,7 +46,56 @@ app.get("/", (req, res) => {
 });
 
 // ==================================================
-// DATABASE TEST
+// DIRECT MARIADB DATABASE TEST
+// Temporary diagnostic route
+// ==================================================
+
+app.get("/api/test-direct-db", async (req, res) => {
+  let connection;
+
+  try {
+    connection = await mariadb.createConnection({
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_PORT),
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+
+      ssl: {
+        rejectUnauthorized: false,
+      },
+
+      connectTimeout: 30000,
+    });
+
+    const result = await connection.query("SELECT 1 AS ok");
+
+    res.json({
+      success: true,
+      message: "Direct MariaDB connection succeeded! 🟢",
+      result,
+    });
+  } catch (error) {
+    console.error("DIRECT DB ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Direct MariaDB connection failed",
+      error: error.message,
+    });
+  } finally {
+    if (connection) {
+      try {
+        await connection.end();
+      } catch (closeError) {
+        console.error("Database connection close error:", closeError);
+      }
+    }
+  }
+});
+
+// ==================================================
+// PRISMA DATABASE TEST
 // ==================================================
 
 app.get("/api/test-db", async (req, res) => {
@@ -62,6 +112,7 @@ app.get("/api/test-db", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Database connection failed",
+      error: error.message,
     });
   }
 });
