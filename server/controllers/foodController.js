@@ -2,6 +2,63 @@ import { prisma } from "../lib/prisma.js";
 import cloudinary from "../config/cloudinary.js";
 
 // =========================================================
+// HELPERS
+// =========================================================
+
+const parseBoolean = (value, defaultValue) => {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+
+  return defaultValue;
+};
+
+const parsePositiveInt = (value) => {
+  const number = Number(value);
+
+  if (!Number.isInteger(number) || number <= 0) {
+    return null;
+  }
+
+  return number;
+};
+
+const parsePrice = (value) => {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number < 0) {
+    return null;
+  }
+
+  return number;
+};
+
+const parseRating = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return 0;
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number < 0 || number > 5) {
+    return null;
+  }
+
+  return number;
+};
+
+// =========================================================
 // CREATE FOOD
 // =========================================================
 
@@ -19,13 +76,13 @@ export const createFood = async (req, res) => {
       categoryId,
     } = req.body;
 
-    // Validate required fields
+    // Required fields
     if (
-      !name ||
-      !description ||
+      !name?.trim() ||
+      !description?.trim() ||
       price === undefined ||
-      !image ||
-      !categoryId
+      !image?.trim() ||
+      categoryId === undefined
     ) {
       return res.status(400).json({
         success: false,
@@ -34,10 +91,40 @@ export const createFood = async (req, res) => {
       });
     }
 
+    // Validate category ID
+    const categoryIdNumber = parsePositiveInt(categoryId);
+
+    if (!categoryIdNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid category ID",
+      });
+    }
+
+    // Validate price
+    const parsedPrice = parsePrice(price);
+
+    if (parsedPrice === null) {
+      return res.status(400).json({
+        success: false,
+        message: "Price must be a valid non-negative number",
+      });
+    }
+
+    // Validate rating
+    const parsedRating = parseRating(rating);
+
+    if (parsedRating === null) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 0 and 5",
+      });
+    }
+
     // Check category
     const category = await prisma.category.findUnique({
       where: {
-        id: Number(categoryId),
+        id: categoryIdNumber,
       },
     });
 
@@ -53,22 +140,13 @@ export const createFood = async (req, res) => {
       data: {
         name: name.trim(),
         description: description.trim(),
-        price: Number(price),
+        price: parsedPrice,
         image: image.trim(),
         publicId: publicId?.trim() || null,
-
-        rating:
-          rating !== undefined
-            ? Number(rating)
-            : 0,
-
-        isFeatured:
-          isFeatured ?? false,
-
-        isAvailable:
-          isAvailable ?? true,
-
-        categoryId: Number(categoryId),
+        rating: parsedRating,
+        isFeatured: parseBoolean(isFeatured, false),
+        isAvailable: parseBoolean(isAvailable, true),
+        categoryId: categoryIdNumber,
       },
 
       include: {
@@ -76,7 +154,7 @@ export const createFood = async (req, res) => {
       },
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Food created successfully",
       data: food,
@@ -84,7 +162,7 @@ export const createFood = async (req, res) => {
   } catch (error) {
     console.error("Create food error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to create food",
     });
@@ -107,14 +185,14 @@ export const getFoods = async (req, res) => {
       },
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: foods,
     });
   } catch (error) {
     console.error("Get foods error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch foods",
     });
@@ -127,17 +205,15 @@ export const getFoods = async (req, res) => {
 
 export const getFoodById = async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const id = parsePositiveInt(req.params.id);
 
-    // Validate ID
-    if (Number.isNaN(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
         message: "Invalid food ID",
       });
     }
 
-    // Find food
     const food = await prisma.food.findUnique({
       where: {
         id,
@@ -148,7 +224,6 @@ export const getFoodById = async (req, res) => {
       },
     });
 
-    // Food not found
     if (!food) {
       return res.status(404).json({
         success: false,
@@ -156,14 +231,14 @@ export const getFoodById = async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: food,
     });
   } catch (error) {
     console.error("Get food by ID error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch food",
     });
@@ -176,7 +251,14 @@ export const getFoodById = async (req, res) => {
 
 export const updateFood = async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const id = parsePositiveInt(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid food ID",
+      });
+    }
 
     const {
       name,
@@ -190,13 +272,13 @@ export const updateFood = async (req, res) => {
       categoryId,
     } = req.body;
 
-    // Validate required fields
+    // Required fields
     if (
-      !name ||
-      !description ||
+      !name?.trim() ||
+      !description?.trim() ||
       price === undefined ||
-      !image ||
-      !categoryId
+      !image?.trim() ||
+      categoryId === undefined
     ) {
       return res.status(400).json({
         success: false,
@@ -205,10 +287,37 @@ export const updateFood = async (req, res) => {
       });
     }
 
-    // =====================================================
-    // FIND EXISTING FOOD
-    // =====================================================
+    // Validate category
+    const categoryIdNumber = parsePositiveInt(categoryId);
 
+    if (!categoryIdNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid category ID",
+      });
+    }
+
+    // Validate price
+    const parsedPrice = parsePrice(price);
+
+    if (parsedPrice === null) {
+      return res.status(400).json({
+        success: false,
+        message: "Price must be a valid non-negative number",
+      });
+    }
+
+    // Validate rating
+    const parsedRating = parseRating(rating);
+
+    if (parsedRating === null) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 0 and 5",
+      });
+    }
+
+    // Find existing food
     const existingFood = await prisma.food.findUnique({
       where: {
         id,
@@ -222,13 +331,10 @@ export const updateFood = async (req, res) => {
       });
     }
 
-    // =====================================================
-    // CHECK CATEGORY
-    // =====================================================
-
+    // Check category
     const category = await prisma.category.findUnique({
       where: {
-        id: Number(categoryId),
+        id: categoryIdNumber,
       },
     });
 
@@ -239,17 +345,11 @@ export const updateFood = async (req, res) => {
       });
     }
 
-    // =====================================================
-    // PREPARE IMAGE DATA
-    // =====================================================
-
+    // Image information
     const oldPublicId = existingFood.publicId;
     const newPublicId = publicId?.trim() || null;
 
-    // =====================================================
-    // UPDATE FOOD
-    // =====================================================
-
+    // Update food
     const food = await prisma.food.update({
       where: {
         id,
@@ -258,22 +358,13 @@ export const updateFood = async (req, res) => {
       data: {
         name: name.trim(),
         description: description.trim(),
-        price: Number(price),
+        price: parsedPrice,
         image: image.trim(),
         publicId: newPublicId,
-
-        rating:
-          rating !== undefined
-            ? Number(rating)
-            : 0,
-
-        isFeatured:
-          isFeatured ?? false,
-
-        isAvailable:
-          isAvailable ?? true,
-
-        categoryId: Number(categoryId),
+        rating: parsedRating,
+        isFeatured: parseBoolean(isFeatured, false),
+        isAvailable: parseBoolean(isAvailable, true),
+        categoryId: categoryIdNumber,
       },
 
       include: {
@@ -281,13 +372,9 @@ export const updateFood = async (req, res) => {
       },
     });
 
-    // =====================================================
-    // DELETE OLD CLOUDINARY IMAGE
-    // =====================================================
-
+    // Delete old Cloudinary image
     if (
       oldPublicId &&
-      newPublicId &&
       oldPublicId !== newPublicId
     ) {
       try {
@@ -310,11 +397,7 @@ export const updateFood = async (req, res) => {
       }
     }
 
-    // =====================================================
-    // RESPONSE
-    // =====================================================
-
-    res.json({
+    return res.json({
       success: true,
       message: "Food updated successfully",
       data: food,
@@ -329,7 +412,7 @@ export const updateFood = async (req, res) => {
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to update food",
     });
@@ -342,12 +425,16 @@ export const updateFood = async (req, res) => {
 
 export const deleteFood = async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    const id = parsePositiveInt(req.params.id);
 
-    // =====================================================
-    // FIND FOOD FIRST
-    // =====================================================
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid food ID",
+      });
+    }
 
+    // Find food
     const food = await prisma.food.findUnique({
       where: {
         id,
@@ -361,10 +448,7 @@ export const deleteFood = async (req, res) => {
       });
     }
 
-    // =====================================================
-    // DELETE CLOUDINARY IMAGE
-    // =====================================================
-
+    // Delete Cloudinary image
     if (food.publicId) {
       try {
         await cloudinary.uploader.destroy(
@@ -383,26 +467,17 @@ export const deleteFood = async (req, res) => {
           "Cloudinary delete error:",
           cloudinaryError
         );
-
-        // Continue deleting database record
       }
     }
 
-    // =====================================================
-    // DELETE DATABASE RECORD
-    // =====================================================
-
+    // Delete database record
     await prisma.food.delete({
       where: {
         id,
       },
     });
 
-    // =====================================================
-    // RESPONSE
-    // =====================================================
-
-    res.json({
+    return res.json({
       success: true,
       message: "Food deleted successfully",
     });
@@ -416,7 +491,7 @@ export const deleteFood = async (req, res) => {
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to delete food",
     });

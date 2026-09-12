@@ -13,18 +13,38 @@ import { protectAdmin } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 // =========================================================
-// PUBLIC
+// PUBLIC ROUTES
 // =========================================================
 
+// Get all foods
 router.get("/", getFoods);
+
+// Get single food
 router.get("/:id", getFoodById);
 
 // =========================================================
-// PROTECTED ADMIN
+// PROTECTED ADMIN ROUTES
 // =========================================================
 
-router.post("/", protectAdmin, createFood);
-router.put("/:id", protectAdmin, updateFood);
-router.delete("/:id", protectAdmin, deleteFood);
+// Create food
+router.post(
+  "/",
+  protectAdmin,
+  createFood
+);
+
+// Update food
+router.put(
+  "/:id",
+  protectAdmin,
+  updateFood
+);
+
+// Delete food
+router.delete(
+  "/:id",
+  protectAdmin,
+  deleteFood
+);
 
 export default router;
