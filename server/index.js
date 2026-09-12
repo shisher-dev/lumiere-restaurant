@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import mariadb from "mariadb";
+import dns from "node:dns/promises";
 import { prisma } from "./lib/prisma.js";
 
 import categoryRoutes from "./routes/categoryRoutes.js";
@@ -13,10 +14,6 @@ import dashboardRoutes from "./routes/dashboardRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 
 const app = express();
-
-// ==================================================
-// MIDDLEWARE
-// ==================================================
 
 app.use(cors());
 app.use(express.json());
@@ -35,7 +32,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/upload", uploadRoutes);
 
 // ==================================================
-// ROOT API
+// ROOT
 // ==================================================
 
 app.get("/", (req, res) => {
@@ -46,8 +43,49 @@ app.get("/", (req, res) => {
 });
 
 // ==================================================
+// DNS + TCP DIAGNOSTIC
+// ==================================================
+
+app.get("/api/test-network", async (req, res) => {
+  const host = process.env.DB_HOST;
+  const port = Number(process.env.DB_PORT);
+
+  try {
+    console.log("====================================");
+    console.log("NETWORK DIAGNOSTIC START");
+    console.log("====================================");
+
+    console.log("Host:", host);
+    console.log("Port:", port);
+
+    const addresses = await dns.lookup(host, {
+      all: true,
+    });
+
+    console.log("DNS addresses:", addresses);
+
+    res.json({
+      success: true,
+      host,
+      port,
+      dns: addresses,
+    });
+  } catch (error) {
+    console.error("NETWORK DIAGNOSTIC ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      error: {
+        name: error?.name || null,
+        message: error?.message || null,
+        code: error?.code || null,
+      },
+    });
+  }
+});
+
+// ==================================================
 // DIRECT MARIADB DATABASE TEST
-// TEMPORARY DIAGNOSTIC ROUTE
 // ==================================================
 
 app.get("/api/test-direct-db", async (req, res) => {
@@ -55,17 +93,8 @@ app.get("/api/test-direct-db", async (req, res) => {
 
   try {
     console.log("====================================");
-    console.log("DIRECT MARIADB DATABASE TEST START");
+    console.log("DIRECT MARIADB DATABASE TEST");
     console.log("====================================");
-
-    console.log("DB_HOST:", process.env.DB_HOST);
-    console.log("DB_PORT:", process.env.DB_PORT);
-    console.log("DB_USER:", process.env.DB_USER);
-    console.log("DB_NAME:", process.env.DB_NAME);
-    console.log(
-      "DB_PASSWORD:",
-      process.env.DB_PASSWORD ? "SET" : "MISSING"
-    );
 
     connection = await mariadb.createConnection({
       host: process.env.DB_HOST,
@@ -81,12 +110,7 @@ app.get("/api/test-direct-db", async (req, res) => {
       connectTimeout: 30000,
     });
 
-    console.log("✅ Direct MariaDB connection established");
-
     const result = await connection.query("SELECT 1 AS ok");
-
-    console.log("✅ Database query successful");
-    console.log("Query result:", result);
 
     res.json({
       success: true,
@@ -95,62 +119,35 @@ app.get("/api/test-direct-db", async (req, res) => {
     });
   } catch (error) {
     console.error("====================================");
-    console.error("❌ DIRECT MARIADB ERROR");
+    console.error("DIRECT MARIADB ERROR");
     console.error("====================================");
 
-    console.error("Error type:", typeof error);
-    console.error("Error name:", error?.name);
-    console.error("Error message:", error?.message);
-    console.error("Error code:", error?.code);
-    console.error("Error errno:", error?.errno);
-    console.error("Error sqlState:", error?.sqlState);
-    console.error("Error fatal:", error?.fatal);
-    console.error("Error stack:", error?.stack);
-    console.error("Error toString:", String(error));
-
-    console.error(
-      "Error own properties:",
-      Object.getOwnPropertyNames(error || {})
-    );
-
-    console.error(
-      "Error JSON:",
-      JSON.stringify(
-        error,
-        Object.getOwnPropertyNames(error || {})
-      )
-    );
-
-    console.error("Full error:", error);
-
-    console.error("====================================");
+    console.error("Name:", error?.name);
+    console.error("Message:", error?.message);
+    console.error("Code:", error?.code);
+    console.error("Errno:", error?.errno);
+    console.error("SQL State:", error?.sqlState);
+    console.error("Stack:", error?.stack);
 
     res.status(500).json({
       success: false,
       message: "Direct MariaDB connection failed",
-
       error: {
-        type: typeof error,
         name: error?.name || null,
         message: error?.message || null,
         code: error?.code || null,
         errno: error?.errno || null,
         sqlState: error?.sqlState || null,
-        fatal: error?.fatal ?? null,
-        string: String(error),
-        ownProperties: Object.getOwnPropertyNames(error || {}),
-        stack: error?.stack || null,
       },
     });
   } finally {
     if (connection) {
       try {
         await connection.end();
-        console.log("Database connection closed");
       } catch (closeError) {
         console.error(
           "Database connection close error:",
-          closeError
+          closeError?.message
         );
       }
     }
@@ -170,11 +167,7 @@ app.get("/api/test-db", async (req, res) => {
       message: "MySQL database connected successfully! 🟢",
     });
   } catch (error) {
-    console.error("====================================");
-    console.error("❌ PRISMA DATABASE ERROR");
-    console.error("====================================");
-    console.error(error);
-    console.error("====================================");
+    console.error("PRISMA DATABASE ERROR:", error);
 
     res.status(500).json({
       success: false,
@@ -185,7 +178,7 @@ app.get("/api/test-db", async (req, res) => {
 });
 
 // ==================================================
-// 404 HANDLER
+// 404
 // ==================================================
 
 app.use((req, res) => {
