@@ -43,7 +43,7 @@ app.get("/", (req, res) => {
 });
 
 // ==================================================
-// DNS + TCP DIAGNOSTIC
+// NETWORK + ENVIRONMENT DIAGNOSTIC
 // ==================================================
 
 app.get("/api/test-network", async (req, res) => {
@@ -55,8 +55,13 @@ app.get("/api/test-network", async (req, res) => {
     console.log("NETWORK DIAGNOSTIC START");
     console.log("====================================");
 
-    console.log("Host:", host);
-    console.log("Port:", port);
+    console.log("DB_HOST configured:", Boolean(host));
+    console.log("DB_PORT configured:", Boolean(process.env.DB_PORT));
+    console.log("DB_USER configured:", Boolean(process.env.DB_USER));
+    console.log("DB_PASSWORD configured:", Boolean(process.env.DB_PASSWORD));
+    console.log("DB_NAME configured:", Boolean(process.env.DB_NAME));
+
+    console.log("DB Port:", port);
 
     const addresses = await dns.lookup(host, {
       all: true,
@@ -66,15 +71,46 @@ app.get("/api/test-network", async (req, res) => {
 
     res.json({
       success: true,
-      host,
-      port,
-      dns: addresses,
+
+      environment: {
+        dbHostConfigured: Boolean(process.env.DB_HOST),
+        dbPortConfigured: Boolean(process.env.DB_PORT),
+        dbUserConfigured: Boolean(process.env.DB_USER),
+        dbPasswordConfigured: Boolean(process.env.DB_PASSWORD),
+        dbNameConfigured: Boolean(process.env.DB_NAME),
+
+        dbPortIsNumber: Number.isInteger(port),
+        dbPort: Number.isInteger(port) ? port : null,
+      },
+
+      network: {
+        dnsResolved: addresses.length > 0,
+        dns: addresses,
+      },
     });
   } catch (error) {
-    console.error("NETWORK DIAGNOSTIC ERROR:", error);
+    console.error("====================================");
+    console.error("NETWORK DIAGNOSTIC ERROR");
+    console.error("====================================");
+
+    console.error("Name:", error?.name);
+    console.error("Message:", error?.message);
+    console.error("Code:", error?.code);
 
     res.status(500).json({
       success: false,
+
+      environment: {
+        dbHostConfigured: Boolean(process.env.DB_HOST),
+        dbPortConfigured: Boolean(process.env.DB_PORT),
+        dbUserConfigured: Boolean(process.env.DB_USER),
+        dbPasswordConfigured: Boolean(process.env.DB_PASSWORD),
+        dbNameConfigured: Boolean(process.env.DB_NAME),
+
+        dbPortIsNumber: Number.isInteger(port),
+        dbPort: Number.isInteger(port) ? port : null,
+      },
+
       error: {
         name: error?.name || null,
         message: error?.message || null,
