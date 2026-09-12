@@ -13,8 +13,14 @@ import {
   Upload,
 } from "lucide-react";
 
-const API_URL = "http://localhost:5000/api/gallery";
-const UPLOAD_API = "http://localhost:5000/api/upload/image";
+const API_URL =
+  "https://lumiere-restaurant-1dgb.onrender.com/api/gallery";
+
+const ADMIN_API_URL =
+  "https://lumiere-restaurant-1dgb.onrender.com/api/gallery/admin";
+
+const UPLOAD_API =
+  "https://lumiere-restaurant-1dgb.onrender.com/api/upload/image";
 
 const initialForm = {
   image: "",
@@ -46,25 +52,46 @@ function Gallery() {
   const [error, setError] = useState("");
 
   // =========================
-  // FETCH GALLERY
+  // GET ADMIN TOKEN
+  // =========================
+  const getToken = () => {
+    const token = localStorage.getItem("adminToken");
+
+    if (!token) {
+      throw new Error(
+        "Admin session expired. Please log in again."
+      );
+    }
+
+    return token;
+  };
+
+  // =========================
+  // FETCH ADMIN GALLERY
   // =========================
   const fetchGallery = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const response = await fetch(API_URL);
+      const token = getToken();
 
-      const result = await response.json().catch(() => ({}));
+      const response = await fetch(ADMIN_API_URL, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = await response
+        .json()
+        .catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(
           result.message || "Failed to load gallery"
         );
       }
-
-      // Backend returns:
-      // { success: true, data: [...] }
 
       setGallery(
         Array.isArray(result.data) ? result.data : []
@@ -85,7 +112,7 @@ function Gallery() {
   }, []);
 
   // =========================
-  // CREATE IMAGE PREVIEW
+  // IMAGE PREVIEW
   // =========================
   useEffect(() => {
     if (!selectedImage) return;
@@ -120,7 +147,7 @@ function Gallery() {
   // =========================
   const openAddModal = () => {
     setEditingItem(null);
-    setForm(initialForm);
+    setForm({ ...initialForm });
     setSelectedImage(null);
     setImagePreview("");
     setError("");
@@ -155,7 +182,7 @@ function Gallery() {
 
     setIsModalOpen(false);
     setEditingItem(null);
-    setForm(initialForm);
+    setForm({ ...initialForm });
     setSelectedImage(null);
     setImagePreview("");
     setError("");
@@ -169,7 +196,8 @@ function Gallery() {
 
     setForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]:
+        type === "checkbox" ? checked : value,
     }));
   };
 
@@ -213,6 +241,8 @@ function Gallery() {
   // UPLOAD IMAGE TO CLOUDINARY
   // =========================
   const uploadImageToCloudinary = async () => {
+    // No new image selected.
+    // Keep existing image.
     if (!selectedImage) {
       return {
         url: form.image,
@@ -220,13 +250,7 @@ function Gallery() {
       };
     }
 
-    const token = localStorage.getItem("adminToken");
-
-    if (!token) {
-      throw new Error(
-        "Admin session expired. Please log in again."
-      );
-    }
+    const token = getToken();
 
     try {
       setImageUploading(true);
@@ -249,7 +273,8 @@ function Gallery() {
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Failed to upload image."
+          data.message ||
+            "Failed to upload image."
         );
       }
 
@@ -278,18 +303,18 @@ function Gallery() {
   };
 
   // =========================
-  // SAVE GALLERY
+  // SAVE GALLERY IMAGE
   // =========================
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // New item requires image
+    // New item requires an image.
     if (!editingItem && !selectedImage) {
       setError("Please choose an image.");
       return;
     }
 
-    // Existing item can keep current image
+    // Existing item can keep current image.
     if (
       editingItem &&
       !selectedImage &&
@@ -303,15 +328,9 @@ function Gallery() {
       setSaving(true);
       setError("");
 
-      const token = localStorage.getItem("adminToken");
+      const token = getToken();
 
-      if (!token) {
-        throw new Error(
-          "Admin session expired. Please log in again."
-        );
-      }
-
-      // Upload new image if selected
+      // Upload only when a new image was selected.
       const uploadResult =
         await uploadImageToCloudinary();
 
@@ -326,7 +345,9 @@ function Gallery() {
         ? `${API_URL}/${editingItem.id}`
         : API_URL;
 
-      const method = editingItem ? "PUT" : "POST";
+      const method = editingItem
+        ? "PUT"
+        : "POST";
 
       const response = await fetch(url, {
         method,
@@ -337,8 +358,10 @@ function Gallery() {
         body: JSON.stringify({
           image: imageUrl,
           publicId: publicId || null,
-          title: form.title.trim() || null,
-          category: form.category.trim() || null,
+          title:
+            form.title.trim() || null,
+          category:
+            form.category.trim() || null,
           isVisible: form.isVisible,
         }),
       });
@@ -349,7 +372,8 @@ function Gallery() {
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Failed to save gallery image."
+          data.message ||
+            "Failed to save gallery image."
         );
       }
 
@@ -368,7 +392,7 @@ function Gallery() {
   };
 
   // =========================
-  // DELETE
+  // DELETE IMAGE
   // =========================
   const handleDelete = async (id) => {
     const confirmed = window.confirm(
@@ -381,13 +405,7 @@ function Gallery() {
       setDeletingId(id);
       setError("");
 
-      const token = localStorage.getItem("adminToken");
-
-      if (!token) {
-        throw new Error(
-          "Admin session expired. Please log in again."
-        );
-      }
+      const token = getToken();
 
       const response = await fetch(
         `${API_URL}/${id}`,
@@ -405,18 +423,22 @@ function Gallery() {
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Failed to delete image."
+          data.message ||
+            "Failed to delete image."
         );
       }
 
       setGallery((prev) =>
-        prev.filter((item) => item.id !== id)
+        prev.filter(
+          (item) => item.id !== id
+        )
       );
     } catch (err) {
       console.error(err);
 
       setError(
-        err.message || "Unable to delete image."
+        err.message ||
+          "Unable to delete image."
       );
     } finally {
       setDeletingId(null);
@@ -426,18 +448,14 @@ function Gallery() {
   // =========================
   // TOGGLE VISIBILITY
   // =========================
-  const handleToggleVisibility = async (item) => {
+  const handleToggleVisibility = async (
+    item
+  ) => {
     try {
       setTogglingId(item.id);
       setError("");
 
-      const token = localStorage.getItem("adminToken");
-
-      if (!token) {
-        throw new Error(
-          "Admin session expired. Please log in again."
-        );
-      }
+      const token = getToken();
 
       const response = await fetch(
         `${API_URL}/${item.id}`,
@@ -449,10 +467,13 @@ function Gallery() {
           },
           body: JSON.stringify({
             image: item.image,
-            publicId: item.publicId || null,
-            title: item.title,
-            category: item.category,
-            isVisible: !item.isVisible,
+            publicId:
+              item.publicId || null,
+            title: item.title || null,
+            category:
+              item.category || null,
+            isVisible:
+              !item.isVisible,
           }),
         }
       );
@@ -493,7 +514,9 @@ function Gallery() {
 
   return (
     <div className="min-h-screen bg-[#0d0d0d] text-white">
-      {/* HEADER */}
+      {/* =========================
+          HEADER
+      ========================= */}
       <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.3em] text-[#d6ad60]">
@@ -519,14 +542,18 @@ function Gallery() {
         </button>
       </div>
 
-      {/* ERROR */}
+      {/* =========================
+          ERROR
+      ========================= */}
       {error && !isModalOpen && (
         <div className="mb-5 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {error}
         </div>
       )}
 
-      {/* SEARCH */}
+      {/* =========================
+          SEARCH
+      ========================= */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:max-w-md">
           <Search
@@ -553,7 +580,9 @@ function Gallery() {
         </div>
       </div>
 
-      {/* CONTENT */}
+      {/* =========================
+          CONTENT
+      ========================= */}
       {loading ? (
         <div className="flex min-h-87.5 items-center justify-center rounded-xl border border-white/10 bg-[#111111]">
           <div className="flex flex-col items-center gap-4">
@@ -711,7 +740,9 @@ function Gallery() {
         </div>
       )}
 
-      {/* ADD / EDIT MODAL */}
+      {/* =========================
+          ADD / EDIT MODAL
+      ========================= */}
       {isModalOpen && (
         <div className="fixed inset-0 z-9999 flex items-center justify-center overflow-y-auto bg-black/80 px-4 py-8 backdrop-blur-sm">
           <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#111111] shadow-2xl">
@@ -805,7 +836,7 @@ function Gallery() {
                     </div>
                   </div>
                 ) : (
-                  <label className="flex min-h-55cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-[#0d0d0d] px-6 text-center transition hover:border-[#d6ad60]/40 hover:bg-[#121212]">
+                  <label className="flex min-h-55 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-[#0d0d0d] px-6 text-center transition hover:border-[#d6ad60]/40 hover:bg-[#121212]">
                     <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-[#d6ad60]/20 bg-[#d6ad60]/10">
                       <Upload
                         size={24}
@@ -833,7 +864,9 @@ function Gallery() {
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
-                      onChange={handleImageChange}
+                      onChange={
+                        handleImageChange
+                      }
                       className="hidden"
                     />
                   </label>
