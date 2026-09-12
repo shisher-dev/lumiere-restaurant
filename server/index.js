@@ -55,12 +55,14 @@ app.get("/api/test-network", async (req, res) => {
     console.log("NETWORK DIAGNOSTIC START");
     console.log("====================================");
 
-    console.log("DB_HOST configured:", Boolean(host));
+    console.log("DB_HOST configured:", Boolean(process.env.DB_HOST));
     console.log("DB_PORT configured:", Boolean(process.env.DB_PORT));
     console.log("DB_USER configured:", Boolean(process.env.DB_USER));
-    console.log("DB_PASSWORD configured:", Boolean(process.env.DB_PASSWORD));
+    console.log(
+      "DB_PASSWORD configured:",
+      Boolean(process.env.DB_PASSWORD)
+    );
     console.log("DB_NAME configured:", Boolean(process.env.DB_NAME));
-
     console.log("DB Port:", port);
 
     const addresses = await dns.lookup(host, {
@@ -151,7 +153,9 @@ app.get("/api/test-direct-db", async (req, res) => {
     res.json({
       success: true,
       message: "Direct MariaDB connection succeeded! 🟢",
-      result,
+      result: result.map((row) => ({
+        ok: Number(row.ok),
+      })),
     });
   } catch (error) {
     console.error("====================================");
@@ -203,7 +207,14 @@ app.get("/api/test-db", async (req, res) => {
       message: "MySQL database connected successfully! 🟢",
     });
   } catch (error) {
-    console.error("PRISMA DATABASE ERROR:", error);
+    console.error("====================================");
+    console.error("PRISMA DATABASE ERROR");
+    console.error("====================================");
+
+    console.error("Name:", error?.name);
+    console.error("Message:", error?.message);
+    console.error("Code:", error?.code);
+    console.error("Stack:", error?.stack);
 
     res.status(500).json({
       success: false,
