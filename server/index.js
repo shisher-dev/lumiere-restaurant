@@ -54,6 +54,10 @@ app.get("/api/test-direct-db", async (req, res) => {
   let connection;
 
   try {
+    console.log("====================================");
+    console.log("DIRECT MARIADB DATABASE TEST START");
+    console.log("====================================");
+
     connection = await mariadb.createConnection({
       host: process.env.DB_HOST,
       port: Number(process.env.DB_PORT),
@@ -68,7 +72,12 @@ app.get("/api/test-direct-db", async (req, res) => {
       connectTimeout: 30000,
     });
 
+    console.log("✅ Direct MariaDB connection established");
+
     const result = await connection.query("SELECT 1 AS ok");
+
+    console.log("✅ Database query successful");
+    console.log("Query result:", result);
 
     res.json({
       success: true,
@@ -76,19 +85,41 @@ app.get("/api/test-direct-db", async (req, res) => {
       result,
     });
   } catch (error) {
-    console.error("DIRECT DB ERROR:", error);
+    console.error("====================================");
+    console.error("❌ DIRECT DB ERROR");
+    console.error("====================================");
+
+    console.error("Name:", error?.name);
+    console.error("Message:", error?.message);
+    console.error("Code:", error?.code);
+    console.error("Errno:", error?.errno);
+    console.error("SQL State:", error?.sqlState);
+    console.error("Stack:", error?.stack);
+    console.error("Full Error:", error);
+
+    console.error("====================================");
 
     res.status(500).json({
       success: false,
       message: "Direct MariaDB connection failed",
-      error: error.message,
+      error: {
+        name: error?.name || null,
+        message: error?.message || null,
+        code: error?.code || null,
+        errno: error?.errno || null,
+        sqlState: error?.sqlState || null,
+      },
     });
   } finally {
     if (connection) {
       try {
         await connection.end();
+        console.log("Database connection closed");
       } catch (closeError) {
-        console.error("Database connection close error:", closeError);
+        console.error(
+          "Database connection close error:",
+          closeError?.message
+        );
       }
     }
   }
@@ -107,12 +138,16 @@ app.get("/api/test-db", async (req, res) => {
       message: "MySQL database connected successfully! 🟢",
     });
   } catch (error) {
-    console.error("Database test error:", error);
+    console.error("====================================");
+    console.error("❌ PRISMA DATABASE ERROR");
+    console.error("====================================");
+    console.error(error);
+    console.error("====================================");
 
     res.status(500).json({
       success: false,
       message: "Database connection failed",
-      error: error.message,
+      error: error?.message || null,
     });
   }
 });
