@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE `gallery` ADD COLUMN `publicId` VARCHAR(191) NULL;
+ALTER TABLE `Gallery` ADD COLUMN `publicId` VARCHAR(191) NULL;
