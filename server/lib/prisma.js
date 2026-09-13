@@ -14,7 +14,7 @@ const adapter = new PrismaMariaDb({
     rejectUnauthorized: false,
   },
 
-  connectionLimit: 1,
+  connectionLimit: 5,
   connectTimeout: 30000,
   acquireTimeout: 30000,
 });
